@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dodge the Blocks</title>
+    <style>
+        html, body { height: 100%; margin: 0; font-family: Arial, Helvetica, sans-serif; background:#111; color:#fff; }
+        #game { display:block; margin: 0 auto; background:#222; border:4px solid #333; }
+        .overlay { position:fixed; left:0; top:0; right:0; bottom:0; display:flex; align-items:center; justify-content:center; }
+        #menu { text-align:center; }
+        button { padding:10px 16px; font-size:16px; cursor:pointer; }
+    </style>
+</head>
+<body>
+    <div class="overlay" id="menu">
+        <div>
+            <h1>Dodge the Blocks</h1>
+            <p>Move with ← and → (or A / D). Avoid falling blocks. Press Start to play.</p>
+            <button id="startBtn">Start</button>
+        </div>
+    </div>
+
+    <canvas id="game" width="480" height="640"></canvas>
+
+    <script>
+        // Simple dodge game
+        const canvas = document.getElementById('game');
+        const ctx = canvas.getContext('2d');
+        const startBtn = document.getElementById('startBtn');
+        const menu = document.getElementById('menu');
+
+        const W = canvas.width, H = canvas.height;
+        let player = { x: W/2 - 20, y: H - 50, w: 40, h: 40, speed: 6 };
+        let keys = {};
+        let obstacles = [];
+        let spawnTimer = 0;
+        let score = 0;
+        let running = false;
+        let gameLoopId = null;
+
+        function startGame(){
+            player.x = W/2 - player.w/2;
+            obstacles = [];
+            spawnTimer = 0;
+            score = 0;
+            running = true;
+            menu.style.display = 'none';
+            if(gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoop();
+        }
+
+        function endGame(){
+            running = false;
+            menu.innerHTML = `<div id=\"menuContent\"><h1>Game Over</h1><p>Score: ${Math.floor(score)}</p><button id=\"startBtn\">Play Again</button></div>`;
+            menu.style.display = 'flex';
+            document.getElementById('startBtn').addEventListener('click', startGame);
+        }
+
+        function spawnObstacle(){
+            const size = 20 + Math.random()*40;
+            const x = Math.random()*(W - size);
+            const speed = 1.5 + Math.random()*3 + score/100; // gradually faster
+            obstacles.push({ x, y: -size, w: size, h: size, speed });
+        }
+
+        function update(dt){
+            // player movement
+            if(keys['ArrowLeft'] || keys['a'] || keys['A']) player.x -= player.speed;
+            if(keys['ArrowRight'] || keys['d'] || keys['D']) player.x += player.speed;
+            player.x = Math.max(0, Math.min(W - player.w, player.x));
+
+            // spawn logic
+            spawnTimer += dt;
+            if(spawnTimer > Math.max(300 - score*2, 120)){
+                spawnTimer = 0;
+                spawnObstacle();
+            }
+
+            // obstacles
+            for(let i = obstacles.length-1; i>=0; i--){
+                const o = obstacles[i];
+                o.y += o.speed;
+                if(o.y > H) obstacles.splice(i,1);
+                // collision
+                if(o.x < player.x + player.w && o.x + o.w > player.x && o.y < player.y + player.h && o.y + o.h > player.y){
+                    endGame();
+                }
+            }
+
+            score += dt*0.01;
+        }
+
+        function draw(){
+            // clear
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0,0,W,H);
+
+            // player
+            ctx.fillStyle = '#0f0';
+            ctx.fillRect(player.x, player.y, player.w, player.h);
+
+            // obstacles
+            ctx.fillStyle = '#f44';
+            obstacles.forEach(o => ctx.fillRect(o.x, o.y, o.w, o.h));
+
+            // HUD
+            ctx.fillStyle = '#fff';
+            ctx.font = '18px Arial';
+            ctx.fillText('Score: ' + Math.floor(score), 10, 24);
+        }
+
+        let last = performance.now();
+        function gameLoop(now = performance.now()){
+            const dt = now - last;
+            last = now;
+            if(running){
+                update(dt);
+                draw();
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+
+        // input
+        window.addEventListener('keydown', e => keys[e.key] = true);
+        window.addEventListener('keyup', e => keys[e.key] = false);
+
+        // start button
+        startBtn.addEventListener('click', startGame);
+
+        // make canvas responsive while keeping aspect ratio
+        function fitCanvas(){
+            const scale = Math.min(window.innerWidth / W, window.innerHeight / H) * 0.95;
+            canvas.style.width = Math.round(W * scale) + 'px';
+            canvas.style.height = Math.round(H * scale) + 'px';
+        }
+        window.addEventListener('resize', fitCanvas);
+        fitCanvas();
+    </script>
+</body>
+</html>
